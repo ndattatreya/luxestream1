@@ -8,13 +8,13 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const User = require('./models/User'); // Import the User model
-const Movie = require('./models/Movie'); // Create a Movie model
-const userRoutes = require('./routes/userRoutes');
-const movieRoutes = require('./routes/movieRoutes'); // Import the Movie routes
-const paymentRoutes = require('./routes/paymentRoutes');
-const authRoutes = require('./routes/authRoutes');
-const auth = require('./middleware/auth'); // Adjust path if needed
+const User = require('./server/models/User'); // Import the User model
+const Movie = require('./server/models/Movie'); // Create a Movie model
+const userRoutes = require('./server/routes/userRoutes');
+const movieRoutes = require('./server/routes/movieRoutes'); // Import the Movie routes
+const paymentRoutes = require('./server/routes/paymentRoutes');
+const authRoutes = require('./server/routes/authRoutes');
+const auth = require('./server/middleware/auth'); // Adjust path if needed
 
 const app = express();
 
