@@ -2,6 +2,8 @@
 
 An AI-powered OTT (Over-The-Top) streaming web application built using the MERN stack. This platform allows users to browse, stream, and get personalized recommendations for movies and TV shows using hybrid machine learning models (Decision Tree + ANN).
 
+> **## Recommendation System - Future Work**
+
 ## 🚀 Features
 
 - 🔐 User Authentication (Email + OAuth via Google & GitHub)
@@ -70,7 +72,7 @@ Model built using:
 ### Clone the repo
 
 
-git clone [https://github.com/your-username/ott-ai-platform.git](https://github.com/ndattatreya/luxeStream.git)
+git clone [https://github.com/ndattatreya/luxestream1.git](https://github.com/ndattatreya/luxeStream.git)
 
 
 ### Start the Frontend
@@ -104,7 +106,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🌐 Live Demo
 
-[🚀 Coming Soon – Hosted on Vercel/Render]
+[🚀 Hosted on Vercel/Render]
+https://luxestream1.vercel.app/
 
 
 Let me know if you'd like:
