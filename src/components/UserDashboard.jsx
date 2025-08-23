@@ -663,7 +663,7 @@ const MovieDetailsModal = ({ movie, imdbDetails, onClose }) => {
     setFavLoading(false);
   };
 
-  const handlePayment = async () => {
+ /* const handlePayment = async () => {
     try {
       const movieId = movie._id || movie.id; // Ensure we have a valid ID
       if (!movieId) {
@@ -741,7 +741,88 @@ const MovieDetailsModal = ({ movie, imdbDetails, onClose }) => {
       console.error('Payment error:', error);
       alert('Failed to process payment. Please try again.');
     }
-  };
+  }; */
+
+  const handlePayment = async () => {
+  try {
+    const movieId = movie._id || movie.id;
+    if (!movieId) {
+      throw new Error("Invalid movie ID");
+    }
+
+    const token = localStorage.getItem("token");
+
+    // 🔹 Create order on your backend
+    const orderResponse = await fetch("http://localhost:5000/api/payments/create-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        amount: 1200,        // ⚠️ Amount must be in paise → 1200 = ₹12.00
+        movieId: movieId,
+        userId: user?._id,
+      }),
+    });
+
+    const orderData = await orderResponse.json();
+
+    if (!orderResponse.ok) {
+      throw new Error(orderData.message || "Failed to create order");
+    }
+
+    const options = {
+      key: import.meta.env.RAZORPAY_KEY_ID,
+      amount: orderData.amount,        // comes from backend
+      currency: orderData.currency,
+      name: "LuxeStream",
+      description: `Payment for ${movie.title}`,
+      order_id: orderData.id,
+      handler: async (response) => {
+        try {
+          const verifyResponse = await fetch("http://localhost:5000/api/payments/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              userId: user?._id,
+              movieId: movieId,
+            }),
+          });
+
+          if (!verifyResponse.ok) {
+            throw new Error("Payment verification failed");
+          }
+
+          alert("Payment successful!");
+          navigate(`/movie/${movieId}`);  // use normalized ID
+        } catch (err) {
+          console.error("Payment verification error:", err);
+          alert("Payment verification failed. Please contact support.");
+        }
+      },
+      prefill: {
+        name: user?.username || "",
+        email: user?.email || "",
+      },
+      theme: {
+        color: "#dc2626",
+      },
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+  } catch (err) {
+    console.error("Payment error:", err);
+    alert(err.message || "Failed to process payment. Please try again.");
+  }
+};
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
