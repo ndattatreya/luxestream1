@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { useAuth } from '../authContext';
 
@@ -13,13 +13,11 @@ const AdminLogin = () => {
   const [captchaValue, setCaptchaValue] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (recaptchaRef.current) recaptchaRef.current.reset();
-  }, []);
-
-  // Assuming the form fields are 'email' and 'password' stored in state
+  // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError('');
 
     try {
       const response = await fetch('http://localhost:5000/api/auth/login', {
@@ -27,28 +25,39 @@ const AdminLogin = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, captcha: captchaValue }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('adminToken', data.token);
+        // Update auth context with user info and token
+        login({ email, role: 'admin', token: data.token });
         navigate('/admindashboard');
       } else {
-        alert(data.message || 'Login failed');
+        setError(data.message || 'Login failed');
+        if (recaptchaRef.current) recaptchaRef.current.reset();
+        setCaptchaValue(null);
       }
     } catch (err) {
       console.error('Login error:', err);
-      alert('An error occurred during login');
+      setError('An error occurred during login');
+      if (recaptchaRef.current) recaptchaRef.current.reset();
+      setCaptchaValue(null);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-black bg-opacity-50 pt-20"
-      style={{ backgroundImage: `url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&q=80&w=1920')` }}>
+    <div
+      className="min-h-screen flex items-center justify-center bg-cover bg-center bg-black bg-opacity-50 pt-20"
+      style={{
+        backgroundImage:
+          "url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&q=80&w=1920')",
+      }}
+    >
       <div className="absolute inset-0 bg-black bg-opacity-60"></div>
-
       <div className="z-10 p-8 bg-black bg-opacity-80 rounded-lg w-full max-w-md">
         <h2 className="text-3xl font-bold text-white mb-8">Admin Login</h2>
         {error && <p className="text-red-500 mb-4">{error}</p>}
@@ -102,7 +111,6 @@ const AdminLogin = () => {
             {isLoading ? 'Logging in...' : 'Admin Login'}
           </button>
         </form>
-
       </div>
     </div>
   );

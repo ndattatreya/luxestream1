@@ -64,7 +64,7 @@ const AppRoutes = () => {
       <Route
         path="/admindashboard"
         element={
-          <ProtectedRoute isAdminRoute={true} Navigateto="/adminlogin">
+          <ProtectedRoute isAdminRoute={true} >
             <AdminDashboard />
           </ProtectedRoute>
         }

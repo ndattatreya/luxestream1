@@ -8,6 +8,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 const User = require('./models/User'); // Import the User model
  const Movie = require('./models/Movie'); // Create a Movie model
  const userRoutes = require('./routes/userRoutes');
@@ -228,7 +229,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Admin login endpoint
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   // TEMPORARY debug logs
@@ -236,7 +237,7 @@ app.post('/api/auth/login', (req, res) => {
   console.log('Expected:', process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
 
   if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-    const token = jwt.sign({ role: 'admin' }, 'your-secret-key', { expiresIn: '1h' });
+    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '1h' });
     return res.json({ success: true, message: 'Login successful', token });
   } else {
     return res.status(401).json({ success: false, message: 'Invalid credentials' });

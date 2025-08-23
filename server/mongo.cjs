@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { celebrate, Joi, errors } = require('celebrate');
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 const mongoAtlasUri = "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.3.8";
 mongoose.connect(mongoAtlasUri, {
     useNewUrlParser: true,
