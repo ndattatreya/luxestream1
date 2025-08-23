@@ -693,7 +693,7 @@ const MovieDetailsModal = ({ movie, imdbDetails, onClose }) => {
 
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: orderData.amount,
+        amount: orderData.amount*100,
         currency: orderData.currency,
         name: 'LuxeStream',
         description: `Payment for ${movie.title}`,
