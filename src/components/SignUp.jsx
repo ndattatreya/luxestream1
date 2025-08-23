@@ -15,7 +15,7 @@ const SignUp = () => {
     setSuccess('');
 
     try {
-      const response = await fetch('http://localhost:10000/api/signup', {
+      const response = await fetch('http://localhost:5000/api/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
