@@ -448,7 +448,7 @@ app.use((err, req, res, next) => {
 });
 
 // Server start
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 5000;
 mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log('Connected to MongoDB');
