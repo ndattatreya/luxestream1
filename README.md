@@ -11,14 +11,14 @@ An AI-powered OTT (Over-The-Top) streaming web application built using the MERN 
 - 🔍 Advanced Search and Filters
 - ❤️ Watchlist Management
 - 💳 Razorpay Payment Integration
-- 🤖 AI-Powered Recommendation System
+- 🤖 AI-Powered Recommendation System (To Be Implemented)
   - Content-based Filtering
   - Decision Tree Classifier
   - Artificial Neural Network (ANN) for personalization
 - 🛠️ Admin Dashboard for Content Management
 
 
-## 🧠 AI Recommendation System
+## 🧠 AI Recommendation System (To Be Implemented)
 
 Our hybrid recommender system uses:
 - ✅ **Content-based Filtering** to suggest similar movies based on metadata.
@@ -52,7 +52,6 @@ Model built using:
 
 
 ## 📁 Project Structure
-
 
 .
 ├── client/               # React Frontend
