@@ -107,12 +107,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 [🚀 Hosted on Vercel/Render]
 https://luxestream1.vercel.app/
-
-
-Let me know if you'd like:
-- Badges (Build, License, Version, etc.)
-- Screenshots section
-- Contribution guidelines
-- API docs section
-
-I can also help you generate a `requirements.txt`, `.env.example`, or auto-deploy script.
