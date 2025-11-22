@@ -40,6 +40,15 @@ app.use(cors({
   ],
   credentials: true
 }));
+// Handle CORS Preflight for all routes
+app.options('*', cors({
+  origin: [
+    'http://localhost:5173',
+    'https://luxestream1.vercel.app'
+  ],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
