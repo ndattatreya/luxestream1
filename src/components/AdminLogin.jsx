@@ -13,36 +13,34 @@ const AdminLogin = () => {
   const [captchaValue, setCaptchaValue] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, captcha: captchaValue }),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/auth/login`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email, password, recaptchaToken: captchaValue }),
+        }
+      );
 
       const data = await response.json();
 
-      if (response.ok) {
-        // Update auth context with user info and token
-        login({ email, role: 'admin', token: data.token });
-        navigate('/admindashboard');
-      } else {
-        setError(data.message || 'Login failed');
-        if (recaptchaRef.current) recaptchaRef.current.reset();
-        setCaptchaValue(null);
-      }
+      if (!response.ok) throw new Error(data.message || 'Login failed');
+
+      // Save token & update auth state
+      localStorage.setItem('token', data.token);
+      login({ email, role: 'admin', token: data.token });
+
+      navigate('/admindashboard', { replace: true });
     } catch (err) {
-      console.error('Login error:', err);
-      setError('An error occurred during login');
-      if (recaptchaRef.current) recaptchaRef.current.reset();
+      setError(err.message || 'An error occurred during login');
+      recaptchaRef.current?.reset();
       setCaptchaValue(null);
     } finally {
       setIsLoading(false);
@@ -105,7 +103,8 @@ const AdminLogin = () => {
 
           <button
             type="submit"
-            className={`w-full ${isLoading ? 'bg-gray-600' : 'bg-red-600 hover:bg-red-700'} text-white py-4 rounded font-semibold transition duration-300`}
+            className={`w-full ${isLoading ? 'bg-gray-600' : 'bg-red-600 hover:bg-red-700'} 
+              text-white py-4 rounded font-semibold transition duration-300`}
             disabled={isLoading || !captchaValue}
           >
             {isLoading ? 'Logging in...' : 'Admin Login'}
