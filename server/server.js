@@ -13,6 +13,7 @@ const axios = require("axios");
 const User = require("./models/User");
 const Movie = require("./models/Movie");
 const auth = require("./middleware/auth");
+const tmdbRoutes = require('./routes/tmdbRoutes');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use(
 app.options("*", cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/tmdb', tmdbRoutes);
 
 // Debug Requests
 app.use((req, res, next) => {
