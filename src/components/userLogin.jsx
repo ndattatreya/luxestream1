@@ -19,34 +19,34 @@ const UserLogin = () => {
     if (recaptchaRef.current) recaptchaRef.current.reset();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
+  const API_BASE = import.meta.env.VITE_BACKEND_URL || "https://luxestream1.onrender.com";
 
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/auth/login`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email, password, recaptchaToken: captchaValue }),
-        }
-      );
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  setIsLoading(true);
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Login failed');
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, password, recaptchaToken: captchaValue }),
+    });
 
-      localStorage.setItem('token', data.token);
-      await login(data.user);
-      navigate(location.state?.from || '/userdashboard', { replace: true });
-    } catch (error) {
-      setError(error.message || 'An error occurred during login');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Login failed');
+
+    localStorage.setItem('token', data.token);
+    await login(data.user);
+    navigate(location.state?.from || '/userdashboard', { replace: true });
+
+  } catch (error) {
+    setError(error.message || 'An error occurred during login');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-black bg-opacity-50 pt-20"
