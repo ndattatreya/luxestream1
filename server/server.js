@@ -137,7 +137,7 @@ passport.deserializeUser(async (id, done) => {
   done(null, user);
 });
 
-app.use("/api", movieRoutes);
+//app.use("/api", movieRoutes);
 
 // Google OAuth strategy
 passport.use(new GoogleStrategy({
