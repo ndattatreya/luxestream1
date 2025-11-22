@@ -1,478 +1,221 @@
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const Razorpay = require('razorpay');
-const cors = require('cors');
-const session = require('express-session');
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const axios = require('axios');
-const User = require('./models/User'); // Import the User model
- const Movie = require('./models/Movie'); // Create a Movie model
- const userRoutes = require('./routes/userRoutes');
- const movieRoutes = require('./routes/movieRoutes'); // Import the Movie routes
- const paymentRoutes = require('./routes/paymentRoutes');
- const authRoutes = require('./routes/authRoutes');
- const auth = require('./middleware/auth'); // Adjust path if needed
+require("dotenv").config();
+const express = require("express");
+const mongoose = require("mongoose");
+const Razorpay = require("razorpay");
+const cors = require("cors");
+const session = require("express-session");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const axios = require("axios");
+
+const User = require("./models/User");
+const Movie = require("./models/Movie");
+const auth = require("./middleware/auth");
 
 const app = express();
 
-// Helper to generate JWT for a user
+// Config
+const CLIENT_URL = process.env.CLIENT_URL || "https://luxestream1.vercel.app";
+
+// Middleware
+app.use(
+  cors({
+    origin: [CLIENT_URL],
+    credentials: true,
+  })
+);
+app.options("*", cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Debug Requests
+app.use((req, res, next) => {
+  console.log(req.method, req.url);
+  next();
+});
+
+// Security Headers
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
+// Session + Passport
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "luxestream_secret",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport Serialization
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) =>
+  done(null, await User.findById(id))
+);
+
+// Generate JWT
 function generateJWT(user) {
   return jwt.sign(
     {
       id: user._id,
       email: user.email,
-      role: user.role || 'user'
+      role: user.role,
     },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: "7d" }
   );
 }
 
-// Middleware
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://luxestream1.vercel.app'
-  ],
-  credentials: true
-}));
-// Handle CORS Preflight for all routes
-app.options('*', cors({
-  origin: [
-    'http://localhost:5173',
-    'https://luxestream1.vercel.app'
-  ],
-  credentials: true
-}));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-const seedDefaultAdmin = async () => {
-  const existingAdmin = await User.findOne({ email: process.env.ADMIN_EMAIL });
-
-  if (!existingAdmin) {
-    const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+// 🔐 Seed Default Admin
+async function seedAdmin() {
+  const admin = await User.findOne({ email: process.env.ADMIN_EMAIL });
+  if (!admin) {
     await User.create({
-      username: 'LuxeStream Admin',
+      username: "Admin",
       email: process.env.ADMIN_EMAIL,
-      password: hashedPassword,
-      role: 'admin'
+      password: await bcrypt.hash(process.env.ADMIN_PASSWORD, 10),
+      role: "admin",
     });
-    console.log('Default admin user created');
-  } else {
-    console.log('Admin user already exists');
+    console.log("Admin user created!");
   }
-};
+}
 
-// Debug middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+// 🔹 Google OAuth Strategy
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`,
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      const email = profile.emails[0].value;
+      let user = await User.findOne({ googleId: profile.id });
 
-app.use((req, res, next) => {
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=()');
-  next();
-});
-
-// Routes
-app.use('/api/payments', paymentRoutes);
-app.use('/api/auth', authRoutes);
-
-// Mount API routes
-app.use('/api/users', userRoutes);
-app.use('/api/movies', movieRoutes);
-
-// Force JSON content type
-app.use((req, res, next) => {
-  res.setHeader('Content-Type', 'application/json');
-  next();
-});
-
-app.use(session({
-  secret: 'luxestream_secret',
-  resave: false,
-  saveUninitialized: false,
-}));
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Razorpay setup
-const razorpayInstance = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
-// Razorpay route
-app.post('/create-order', auth, async (req, res) => {
-  try {
-    // Use a shorter receipt string
-    const receipt = `rcpt_${Date.now()}`; // This will always be < 40 chars
-
-    const options = {
-      amount: req.body.amount * 100, // in paise
-      currency: 'INR',
-      receipt: receipt
-    };
-    const order = await razorpayInstance.orders.create(options);
-    res.status(200).json(order);
-  } catch (err) {
-    console.error('Error creating order:', err);
-    res.status(500).json({ error: 'Error creating Razorpay order' });
-  }
-});
-
-// Passport serialize/deserialize
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser(async (id, done) => {
-  const user = await User.findById(id);
-  done(null, user);
-});
-
-//app.use("/api", movieRoutes);
-
-// Google OAuth strategy
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "http://localhost:5000/auth/google/callback"
-}, async (accessToken, refreshToken, profile, done) => {
-  const email = profile.emails && profile.emails[0] ? profile.emails[0].value : null;
-  if (!email) return done(new Error('No email found in Google profile'), null);
-
-  const isAdmin = (email === process.env.ADMIN_EMAIL);
-
-  let user = await User.findOne({ googleId: profile.id });
-  if (!user) {
-    user = await User.create({
-      googleId: profile.id,
-      email: email,
-      username: profile.displayName, 
-      role: isAdmin ? 'admin' : 'user'
-    });
-  } else {
-    // If the user logs in with the admin email, update their role to admin
-    if (isAdmin && user.role !== 'admin') {
-      user.role = 'admin';
-      await user.save();
+      if (!user) {
+        user = await User.create({
+          googleId: profile.id,
+          email,
+          username: profile.displayName,
+          role: email === process.env.ADMIN_EMAIL ? "admin" : "user",
+        });
+      }
+      return done(null, user);
     }
-  }
+  )
+);
 
-  return done(null, user);
-}));
-
-// OAuth Routes
-// Google
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login', session: false }),
+// Google OAuth Routes
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { session: false }),
   (req, res) => {
-    // Send JWT or redirect with token
-    const token = generateJWT(req.user); // implement this function
-    res.redirect(`http://localhost:5173/oauth-success?token=${token}`);
+    const token = generateJWT(req.user);
+    res.redirect(`${CLIENT_URL}/oauth-success?token=${token}`);
   }
 );
 
-// Get current user
-app.get('/api/user', (req, res) => {
-  res.json(req.user || null);
-});
+// 🔹 Admin / User Authentication
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
 
-// Logout
-app.get('/logout', (req, res) => {
-  req.logout(() => {
-    res.redirect('http://localhost:3000');
+  const user = await User.findOne({ email });
+  if (!user) return res.status(401).json({ message: "User not found" });
+
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(401).json({ message: "Invalid credentials" });
+
+  const token = generateJWT(user);
+
+  res.json({
+    success: true,
+    token,
+    user: { id: user._id, email: user.email, role: user.role },
   });
 });
 
-// Signup route
-app.post('/api/signup', async (req, res) => {
-  const { username, email, password } = req.body;
-
-  try {
-    // Check if the user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create a new user
-    const newUser = new User({ username, email, password: hashedPassword, role: 'user' });
-    await newUser.save();
-
-    res.status(201).json({ message: 'User created successfully' });
-  } catch (error) {
-    console.error('Error during signup:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
+// Movies — CRUD
+app.get("/api/movies", async (req, res) => {
+  const movies = await Movie.find();
+  res.json({ success: true, data: movies });
 });
 
-// User Login route
-app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  try {
-    // Find the user by email
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Compare the password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    res.status(200).json({ message: 'Login successful', user });
-  } catch (error) {
-    console.error('Error during login:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
+app.post("/api/movies", auth, async (req, res) => {
+  const movie = await Movie.create(req.body);
+  res.status(201).json({ success: true, data: movie });
 });
 
-// Admin login endpoint
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  // TEMPORARY debug logs
-  console.log('Incoming:', email, password);
-  console.log('Expected:', process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
-
-  if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    return res.json({ success: true, message: 'Login successful', token });
-  } else {
-    return res.status(401).json({ success: false, message: 'Invalid credentials' });
-  }
-});
-
-// Add a new movie
-app.post('/api/movies', async (req, res) => {
+// TMDB Proxy Routes
+app.get("/api/tmdb/details/:id", async (req, res) => {
   try {
-    const movie = new Movie(req.body);
-    await movie.save();
-    res.status(201).json({ message: 'Movie added successfully', movie });
-  } catch (error) {
-    console.error('Error adding movie:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Get all movies
-app.get('/api/movies', async (req, res) => {
-  try {
-    const movies = await Movie.find();
-    res.status(200).json(movies);
-  } catch (error) {
-    console.error('Error fetching movies:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Update a movie
-app.put('/api/movies/:id', async (req, res) => {
-  try {
-    const movieId = req.params.id;
-
-    if (!mongoose.Types.ObjectId.isValid(movieId)) {
-      return res.status(400).json({ message: 'Invalid movie ID' });
-    }
-
-    console.log('Updating movie:', movieId);
-    console.log('Request body:', req.body);
-
-    const movie = await Movie.findByIdAndUpdate(movieId, req.body, { new: true });
-
-    if (!movie) {
-      return res.status(404).json({ message: 'Movie not found' });
-    }
-
-    res.status(200).json({ message: 'Movie updated successfully', movie });
-  } catch (error) {
-    console.error('Error updating movie:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Publish a movie
-app.put('/api/movies/:id/publish', async (req, res) => {
-  try {
-    const movie = await Movie.findByIdAndUpdate(
-      req.params.id,
-      {
-        status: 'published',
-        publishDate: new Date()
-      },
-      { new: true }
+    const response = await axios.get(
+      `https://api.themoviedb.org/3/movie/${req.params.id}?api_key=${process.env.TMDB_API_KEY}`
     );
+    res.json({ success: true, data: response.data });
+  } catch (error) {
+    res.status(500).json({ message: "TMDB movie fetch failed" });
+  }
+});
 
-    if (!movie) {
-      return res.status(404).json({ message: 'Movie not found' });
-    }
+app.get("/api/tmdb/reviews/:id", async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://api.themoviedb.org/3/movie/${req.params.id}/reviews?api_key=${process.env.TMDB_API_KEY}`
+    );
+    res.json({ success: true, data: response.data });
+  } catch (error) {
+    res.status(500).json({ message: "TMDB reviews fetch failed" });
+  }
+});
 
-    res.status(200).json({
-      success: true,
-      data: movie,
-      message: 'Movie published successfully'
+// Razorpay Setup
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || "",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+});
+
+// Create Razorpay Order
+app.post("/api/payments/create-order", auth, async (req, res) => {
+  try {
+    const order = await razorpay.orders.create({
+      amount: req.body.amount,
+      currency: "INR",
+      receipt: `rcpt_${Date.now()}`,
     });
-  } catch (error) {
-    console.error('Error publishing movie:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error publishing movie'
-    });
+    res.json(order);
+  } catch (err) {
+    res.status(400).json({ message: "Payment order creation failed" });
   }
 });
 
-// Delete a movie
-app.delete('/api/movies/:id', async (req, res) => {
-  try {
-    const movie = await Movie.findByIdAndDelete(req.params.id);
-    if (!movie) {
-      return res.status(404).json({ message: 'Movie not found' });
-    }
-    res.status(200).json({ message: 'Movie deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting movie:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
+// Test Route
+app.get("/", (req, res) => res.send("🔥 LuxeStream Server Running!"));
 
-// Add a movie to user's favorites
-app.post('/api/users/:userId/favorites', auth, async (req, res) => {
-  try {
-    const { movieId } = req.body;
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Avoid duplicates
-    if (!user.favorites.includes(movieId)) {
-      user.favorites.push(movieId);
-      await user.save();
-    }
-    res.status(200).json({ message: 'Added to favorites', favorites: user.favorites });
-  } catch (error) {
-    console.error('Error adding favorite:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Remove a movie from user's favorites
-app.delete('/api/users/:userId/favorites/:movieId', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    user.favorites = user.favorites.filter(
-      favId => favId.toString() !== req.params.movieId
-    );
-    await user.save();
-    res.status(200).json({ message: 'Removed from favorites', favorites: user.favorites });
-  } catch (error) {
-    console.error('Error removing favorite:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Add a movie to user's favorites and return updated list
-app.post('/api/users/:userId/favorites', auth, async (req, res) => {
-  try {
-    const { movieId } = req.body;
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Avoid duplicates
-    if (!user.favorites.includes(movieId)) {
-      user.favorites.push(movieId);
-      await user.save();
-    }
-
-    // Populate full movie data for updated favorites
-    const updatedUser = await User.findById(user._id).populate('favorites');
-    res.status(200).json({ message: 'Added to favorites', data: updatedUser.favorites });
-  } catch (error) {
-    console.error('Error adding favorite:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.delete('/api/users/:userId/favorites/:movieId', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    user.favorites = user.favorites.filter(
-      favId => favId.toString() !== req.params.movieId
-    );
-    await user.save();
-
-    const updatedUser = await User.findById(user._id).populate('favorites');
-    res.status(200).json({ message: 'Removed from favorites', data: updatedUser.favorites });
-  } catch (error) {
-    console.error('Error removing favorite:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Set password for OAuth users
-app.post('/api/set-password', auth, async (req, res) => {
-  try {
-    const { newPassword } = req.body;
-    const userId = req.user.id || req.user._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Only allow setting password if not already set
-    if (user.password) {
-      return res.status(400).json({ message: 'Password already set. Use forgot password to reset.' });
-    }
-
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
-    res.json({ message: 'Password set successfully' });
-  } catch (error) {
-    console.error('Error setting password:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Test route
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Server is running' });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ 
-    success: false, 
-    message: 'Internal server error' 
-  });
-});
-
-// Server start
+// Start Server
 const PORT = process.env.PORT || 5000;
-mongoose.connect(process.env.MONGO_URI)
+
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(async () => {
-    console.log('Connected to MongoDB');
-
-    await seedDefaultAdmin(); // 🔐 Create admin if not exists
-
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
+    console.log("MongoDB Connected!");
+    await seedAdmin();
+    app.listen(PORT, () => console.log(`⚡ Server Live on ${PORT}`));
   })
-  .catch(err => {
-    console.error('MongoDB connection error:', err);
+  .catch((err) => {
+    console.error("MongoDB Connection Error:", err);
     process.exit(1);
   });
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("SERVER ERROR:", err);
+  res.status(500).json({ message: "Server Error" });
+});
