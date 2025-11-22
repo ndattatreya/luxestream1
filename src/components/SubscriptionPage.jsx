@@ -60,63 +60,80 @@ const SubscriptionPage = () => {
     };
   }, []);
 
-  const handlePayment = async () => {
-    if (!selectedPlan) {
-      console.error('No plan selected');
+  const API_BASE = import.meta.env.VITE_BACKEND_URL || "https://luxestream1.onrender.com";
+
+const handlePayment = async () => {
+  if (!selectedPlan) {
+    console.error('No plan selected');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('User not authenticated');
       return;
     }
 
-    setLoading(true);
-    try { 
-      console.log('Creating order for plan:', selectedPlan);
-      const response = await fetch('http://localhost:5000/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: selectedPlan.price * 100, // Razorpay expects amount in paise
-          currency: 'INR',
-          planId: selectedPlan.id,
-        }),
-      });
+    console.log('Creating order for plan:', selectedPlan);
 
-      const order = await response.json();
-      console.log('Order created:', order);
-
-      const options = {
-        key: 'rzp_test_5NFOiDIrADrIHb', // Replace with your Razorpay key
+    const response = await fetch(`${API_BASE}/api/payments/create-order`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
         amount: selectedPlan.price * 100,
-        currency: 'INR',
-        name: 'LuxeStream',
-        description: `${selectedPlan.name} Plan Subscription`,
-        order_id: order.id,
-        handler: function (response) {
-          console.log('Payment successful:', response);
-          // Redirect to VideoPlayer page with movie details and allowed attempts
-          navigate('/video-player', {
-            state: {
-              movie: selectedPlan, // Pass the selected plan or movie details
-              allowedAttempts: 3, // Set the allowed attempts
-            },
-          });
-        },
-        prefill: {
-          email: 'user@example.com', // Replace with user's email
-        },
-        theme: {
-          color: '#dc2626',
-        },
-      };
+        movieId: selectedPlan.id, // stored as subscription id
+      }),
+    });
 
-      const razorpay = new window.Razorpay(options);
-      razorpay.open();
-    } catch (error) {
-      console.error('Payment error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const order = await response.json();
+    console.log('Order created:', order);
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: selectedPlan.price * 100,
+      currency: 'INR',
+      name: 'LuxeStream Subscription',
+      description: `${selectedPlan.name} Plan`,
+      order_id: order.id,
+      handler: async function (response) {
+        console.log('Payment successful:', response);
+
+        await fetch(`${API_BASE}/api/payments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            movieId: selectedPlan.id,
+            paymentId: response.razorpay_payment_id,
+            amount: selectedPlan.price,
+          }),
+        });
+
+        navigate('/userdashboard');
+      },
+      theme: {
+        color: '#dc2626',
+      },
+    };
+
+    const razorpay = new window.Razorpay(options);
+    razorpay.open();
+
+  } catch (error) {
+    console.error('Payment error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-black text-white py-16 px-4">
